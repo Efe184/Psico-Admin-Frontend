@@ -4,7 +4,7 @@ This document is the single source of truth for the `psikolog-admin-web` app: la
 
 ## Stack (reference)
 
-- Next.js 15 App Router, React 19, TypeScript 5
+- Next.js 15.3.6 (App Router), React 19, TypeScript 5
 - Tailwind CSS v4, shadcn/ui (registry), `tw-animate-css`
 - Sonner (toasts), Lucide icons, `next-themes`
 
