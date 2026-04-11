@@ -1,0 +1,64 @@
+---
+description: Psikolog admin Next.js app — layered front architecture, routes, and UI conventions
+globs: psikolog-admin-web/**
+---
+
+# Psikolog admin web (`psikolog-admin-web`)
+
+## Scope
+
+These rules apply only under `psikolog-admin-web/`. Full architecture and route map: [docs/PSIKOLOG_ADMIN_FRONT.md](psikolog-admin-web/docs/PSIKOLOG_ADMIN_FRONT.md).
+
+## Layering (mandatory)
+
+1. **`src/types/dto/`** — Request/response interfaces; no React.
+2. **`src/services/**/*.service.ts`** — Async functions calling `httpRequest` from `@/lib/http-client`; **no React imports**.
+3. **`src/hooks/use-*.ts`** — Client hooks that call services; handle loading/error/refetch.
+4. **`src/components/admin/`**, **`src/components/layout/`** — Presentation; **no direct `fetch`/`axios`** (use hooks or server-passed props).
+5. **`src/app/`** — Routes; RSC pages should stay thin; client islands import hooks.
+
+**Feature order when adding a capability:** DTO types → service → hook → page/components.
+
+## Routing
+
+- Admin UI lives in the **`(admin)` route group**; URLs have **no** `(admin)` segment (e.g. `/dashboard`).
+- **Login path:** `/giris` (not `/auth/login`).
+- **Middleware:** `src/middleware.ts` — requires `accessToken` cookie and `userRole=admin` until JWT parsing is implemented.
+
+## Naming
+
+- Components: **PascalCase** (`AdminSidebar.tsx`).
+- Hooks: **`use` + camelCase** (`use-pending-tasks.ts`).
+- Services: **kebab or domain + `.service.ts`** (`pending-tasks.service.ts`).
+- Functions/variables: **camelCase**.
+
+## API contract
+
+Backend responses should match `{ success: boolean; data: T; message: string }`. Use `httpRequest<T>()` from `@/lib/http-client`.
+
+## UI and theme
+
+- Use **shadcn/ui** primitives under `src/components/ui/`.
+- **Brand accent:** `#00A86B` for product name highlights (aligned with Sportlink admin).
+- **Layout rhythm:** wide container `max-w-[1800px]`, muted outer background, bordered card for main shell (see `(admin)/layout.tsx`).
+- **Icons:** Lucide.
+- **Toasts:** Sonner via `AppProviders`.
+
+## Language
+
+- **User-visible strings:** Turkish.
+- **Code comments and technical docs:** English.
+
+## GPTESPIT palette (when adding marketing or status colors)
+
+Prefer: dominant `#FFFFFF`, secondary `#24292E`, accent `#3178C6`; status `#F2994A` (highlight), `#EB5757` (error), `#27AE60` (success). Admin shell may stay neutral shadcn + `#00A86B` brand line.
+
+## i18n
+
+Default UI is TR; avoid hard-coding copy in services. Structure strings so `i18next` (or similar) can be added later.
+
+## Do not
+
+- Add `fetch` inside `components/ui/*` or bypass services from random components.
+- Introduce business logic in `http-client.ts` (only transport and error normalization).
+- Use `app/` route segments that duplicate the Phase 4 plan without updating `PSIKOLOG_ADMIN_FRONT.md` and sidebar nav.
