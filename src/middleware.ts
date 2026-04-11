@@ -46,7 +46,20 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const giris = pathname.startsWith("/giris");
+  // Log out: clear session cookies then show login (must run before admin redirect on /giris)
+  if (
+    pathname.startsWith("/giris") &&
+    request.nextUrl.searchParams.get("cikis") === "1"
+  ) {
+    const target = new URL("/giris", request.url);
+    const res = NextResponse.redirect(target);
+    res.cookies.set(ACCESS_COOKIE, "", { path: "/", maxAge: 0 });
+    res.cookies.set(ROLE_COOKIE, "", { path: "/", maxAge: 0 });
+    return res;
+  }
+
+  const isAuthPublicPath =
+    pathname.startsWith("/giris") || pathname.startsWith("/kayit");
   const admin = isAuthenticatedAdmin(request);
 
   if (pathname === "/") {
@@ -56,7 +69,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/giris", request.url));
   }
 
-  if (giris) {
+  if (isAuthPublicPath) {
     if (admin) {
       return NextResponse.redirect(new URL("/dashboard", request.url));
     }

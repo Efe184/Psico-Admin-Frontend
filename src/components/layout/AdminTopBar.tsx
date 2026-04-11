@@ -53,7 +53,7 @@ export function AdminTopBar({
           {userLabel}
         </span>
         <Link
-          href="/giris"
+          href="/giris?cikis=1"
           className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
         >
           Çıkış
