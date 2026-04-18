@@ -51,6 +51,7 @@ const groups: NavGroup[] = [
       { label: "Blog onayları", href: "/icerik/blog-onaylari" },
       { label: "Blog yazıları", href: "/icerik/blog" },
       { label: "Sayfa / sabit içerik", href: "/icerik/sayfalar" },
+      { label: "SSS Yayınla", href: "/icerik/sss" },
     ],
   },
   {
