@@ -2,8 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
+  clampExpertPriorityScore,
   getExpertDetail,
   listExperts,
+  sortExpertsByPriority,
+  updateExpertPriorityScore,
 } from "@/services/users/experts-list.service";
 import type { ExpertDetail, ExpertListItem } from "@/types/dto/expert-list";
 
@@ -12,6 +15,8 @@ interface UseExpertsResult {
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
+  updatePriority: (expertId: string, score: number) => Promise<void>;
+  toggleExpertStatus: (expertId: string) => void;
   detail: ExpertDetail | null;
   detailLoading: boolean;
   openDetail: (expertId: string) => Promise<void>;
@@ -53,6 +58,34 @@ export function useExperts(): UseExpertsResult {
     setDetail(null);
   }, []);
 
+  const updatePriority = useCallback(async (expertId: string, score: number) => {
+    await updateExpertPriorityScore(expertId, score);
+    const next = clampExpertPriorityScore(score);
+    setExperts((prev) =>
+      sortExpertsByPriority(
+        prev.map((e) => (e.id === expertId ? { ...e, priorityScore: next } : e))
+      )
+    );
+    setDetail((d) => (d?.id === expertId ? { ...d, priorityScore: next } : d));
+  }, []);
+
+  const toggleExpertStatus = useCallback((expertId: string) => {
+    setExperts((prev) =>
+      sortExpertsByPriority(
+        prev.map((e) => {
+          if (e.id !== expertId) return e;
+          const next = e.status === "active" ? "inactive" : "active";
+          return { ...e, status: next };
+        })
+      )
+    );
+    setDetail((d) => {
+      if (!d || d.id !== expertId) return d;
+      const next = d.status === "active" ? "inactive" : "active";
+      return { ...d, status: next };
+    });
+  }, []);
+
   useEffect(() => {
     void load();
   }, [load]);
@@ -62,6 +95,8 @@ export function useExperts(): UseExpertsResult {
     loading,
     error,
     refetch: load,
+    updatePriority,
+    toggleExpertStatus,
     detail,
     detailLoading,
     openDetail,

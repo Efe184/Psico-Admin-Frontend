@@ -143,6 +143,7 @@ export function AdminUsersView() {
         open={warningOpen}
         onOpenChange={setWarningOpen}
         userName={warningUser?.fullName ?? ""}
+        recipientKind="personel üyesine"
         onSendWarning={handleSendWarning}
       />
 

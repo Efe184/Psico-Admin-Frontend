@@ -17,6 +17,8 @@ interface UserWarningDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   userName: string;
+  /** e.g. "danışana", "uzmana" — inserted after the name in the description. */
+  recipientKind?: string;
   onSendWarning: (message: string) => void;
 }
 
@@ -24,6 +26,7 @@ export function UserWarningDialog({
   open,
   onOpenChange,
   userName,
+  recipientKind = "danışana",
   onSendWarning,
 }: UserWarningDialogProps) {
   const [message, setMessage] = useState("");
@@ -46,7 +49,7 @@ export function UserWarningDialog({
         <DialogHeader>
           <DialogTitle>Uyarı gönder: {userName}</DialogTitle>
           <DialogDescription>
-            {userName} adlı danışana gönderilecek uyarı metnini yazın. E-posta veya
+            {userName} adlı {recipientKind} gönderilecek uyarı metnini yazın. E-posta veya
             uygulama bildirimi backend ile bağlandığında iletilecek.
           </DialogDescription>
         </DialogHeader>

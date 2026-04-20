@@ -1,7 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { listPendingBlogApprovals } from "@/services/blog/blog-approvals.service";
+import {
+  approveBlogApproval,
+  listPendingBlogApprovals,
+  rejectBlogApproval,
+  submitAdminBlogRevision,
+} from "@/services/blog/blog-approvals.service";
+import { blogApprovalRejectSchema } from "@/lib/blog-approval-schemas";
 import type { BlogApprovalDto } from "@/types/dto/blog-approval";
 
 interface UseBlogApprovalsResult {
@@ -10,6 +16,16 @@ interface UseBlogApprovalsResult {
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
+  approve: (id: string) => Promise<void>;
+  reject: (id: string, revisionNote: string) => Promise<void>;
+  saveAdminRevision: (
+    id: string,
+    data: { title: string; excerpt: string; content: string }
+  ) => Promise<void>;
+  updateLocalApproval: (
+    id: string,
+    data: Partial<Pick<BlogApprovalDto, "title" | "excerpt" | "content">>
+  ) => void;
 }
 
 export function useBlogApprovals(): UseBlogApprovalsResult {
@@ -31,9 +47,74 @@ export function useBlogApprovals(): UseBlogApprovalsResult {
     }
   }, []);
 
+  const approve = useCallback(async (id: string) => {
+    setApprovals((prev) => prev.filter((item) => item.id !== id));
+    try {
+      await approveBlogApproval(id);
+    } catch {
+      const data = await listPendingBlogApprovals();
+      setApprovals(data);
+      throw new Error("Onay sunucuya iletilemedi. Liste güncellendi.");
+    }
+  }, []);
+
+  const reject = useCallback(async (id: string, revisionNote: string) => {
+    const parsed = blogApprovalRejectSchema.safeParse({ revisionNote });
+    if (!parsed.success) {
+      const msg = parsed.error.flatten().fieldErrors.revisionNote?.[0];
+      throw new Error(msg ?? "Geçersiz revize notu");
+    }
+
+    setApprovals((prev) => prev.filter((item) => item.id !== id));
+    try {
+      await rejectBlogApproval(id, parsed.data.revisionNote);
+    } catch {
+      const data = await listPendingBlogApprovals();
+      setApprovals(data);
+      throw new Error("Red işlemi sunucuya iletilemedi. Liste güncellendi.");
+    }
+  }, []);
+
+  const saveAdminRevision = useCallback(
+    async (id: string, data: { title: string; excerpt: string; content: string }) => {
+      try {
+        await submitAdminBlogRevision(id, data);
+      } catch {
+        const fresh = await listPendingBlogApprovals();
+        setApprovals(fresh);
+        throw new Error("Revizyon sunucuya iletilemedi. Liste güncellendi.");
+      }
+      setApprovals((prev) =>
+        prev.map((item) =>
+          item.id === id ? { ...item, title: data.title, excerpt: data.excerpt, content: data.content } : item
+        )
+      );
+    },
+    []
+  );
+
+  const updateLocalApproval = useCallback(
+    (id: string, data: Partial<Pick<BlogApprovalDto, "title" | "excerpt" | "content">>) => {
+      setApprovals((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, ...data } : item))
+      );
+    },
+    []
+  );
+
   useEffect(() => {
     void load();
   }, [load]);
 
-  return { approvals, setApprovals, loading, error, refetch: load };
+  return {
+    approvals,
+    setApprovals,
+    loading,
+    error,
+    refetch: load,
+    approve,
+    reject,
+    saveAdminRevision,
+    updateLocalApproval,
+  };
 }
