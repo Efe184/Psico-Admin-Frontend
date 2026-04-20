@@ -6,6 +6,8 @@ export interface ExpertListItem {
   email: string;
   status: ExpertStatus;
   registeredAt?: string;
+  /** Higher values surface the expert earlier in listings (admin-controlled). */
+  priorityScore?: number;
 }
 
 export interface ExpertDocument {

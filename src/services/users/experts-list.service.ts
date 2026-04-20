@@ -2,6 +2,8 @@ import { getOptionalApiBase } from "@/lib/http-client";
 import type { ApiResponse } from "@/types/dto/api";
 import type { ExpertDetail, ExpertListItem } from "@/types/dto/expert-list";
 
+const PRIORITY_STORAGE_KEY = "psikolog-admin-expert-priority-scores";
+
 const MOCK_EXPERT_DETAILS: ExpertDetail[] = [
   {
     id: "EXP-1001",
@@ -9,6 +11,7 @@ const MOCK_EXPERT_DETAILS: ExpertDetail[] = [
     email: "ece.karaman@example.com",
     status: "active",
     registeredAt: "2025-09-02",
+    priorityScore: 10,
     biography:
       "Yetişkin psikoterapisi ve kaygı bozuklukları üzerine çalışan, 8+ yıl deneyimli uzman psikolog.",
     keywords: ["kaygı", "stres", "duygu düzenleme"],
@@ -34,6 +37,7 @@ const MOCK_EXPERT_DETAILS: ExpertDetail[] = [
     email: "kerem.yilmaz@example.com",
     status: "active",
     registeredAt: "2025-10-12",
+    priorityScore: 50,
     biography:
       "Ergen danışmanlığı ve aile içi iletişim konularında uzmanlaşmış klinik psikolog.",
     keywords: ["ergen", "aile", "iletişim"],
@@ -53,6 +57,7 @@ const MOCK_EXPERT_DETAILS: ExpertDetail[] = [
     email: "nil.acar@example.com",
     status: "inactive",
     registeredAt: "2025-11-05",
+    priorityScore: 0,
     biography:
       "Travma sonrası destek süreçleri ve kısa süreli çözüm odaklı terapi yaklaşımında deneyimlidir.",
     keywords: ["travma", "yas", "kriz müdahalesi"],
@@ -68,14 +73,84 @@ const MOCK_EXPERT_DETAILS: ExpertDetail[] = [
   },
 ];
 
+type ExpertListRow = ExpertListItem & { priority_score?: number };
+
+export function clampExpertPriorityScore(raw: number): number {
+  const n = Math.round(Number(raw));
+  if (!Number.isFinite(n) || n < 0) return 0;
+  if (n > 999_999) return 999_999;
+  return n;
+}
+
+export function sortExpertsByPriority(items: ExpertListItem[]): ExpertListItem[] {
+  return [...items].sort((a, b) => {
+    const diff = (b.priorityScore ?? 0) - (a.priorityScore ?? 0);
+    if (diff !== 0) return diff;
+    return a.fullName.localeCompare(b.fullName, "tr");
+  });
+}
+
+function readStoredPriorityMap(): Record<string, number> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(PRIORITY_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object") return {};
+    const out: Record<string, number> = {};
+    for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+      const n = clampExpertPriorityScore(Number(v));
+      out[k] = n;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function persistStoredPriorityMap(map: Record<string, number>): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(PRIORITY_STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+function mergeRowPriority(row: ExpertListRow): ExpertListItem {
+  const fromApi =
+    typeof row.priorityScore === "number"
+      ? row.priorityScore
+      : typeof row.priority_score === "number"
+        ? row.priority_score
+        : undefined;
+  const stored = readStoredPriorityMap()[row.id];
+  const priorityScore =
+    stored !== undefined ? stored : clampExpertPriorityScore(fromApi ?? 0);
+
+  return {
+    id: row.id,
+    fullName: row.fullName,
+    email: row.email,
+    status: row.status,
+    registeredAt: row.registeredAt,
+    priorityScore,
+  };
+}
+
 function toList(items: ExpertDetail[]): ExpertListItem[] {
-  return items.map((item) => ({
-    id: item.id,
-    fullName: item.fullName,
-    email: item.email,
-    status: item.status,
-    registeredAt: item.registeredAt,
-  }));
+  return sortExpertsByPriority(
+    items.map((item) =>
+      mergeRowPriority({
+        id: item.id,
+        fullName: item.fullName,
+        email: item.email,
+        status: item.status,
+        registeredAt: item.registeredAt,
+        priorityScore: item.priorityScore,
+      })
+    )
+  );
 }
 
 export async function listExperts(): Promise<ExpertListItem[]> {
@@ -93,20 +168,29 @@ export async function listExperts(): Promise<ExpertListItem[]> {
     if (!res.ok) {
       return toList(MOCK_EXPERT_DETAILS);
     }
-    const payload = (await res.json()) as ApiResponse<ExpertListItem[]>;
+    const payload = (await res.json()) as ApiResponse<ExpertListRow[]>;
     if (!payload?.success || !Array.isArray(payload.data)) {
       return toList(MOCK_EXPERT_DETAILS);
     }
-    return payload.data;
+    return sortExpertsByPriority(payload.data.map((row) => mergeRowPriority(row)));
   } catch {
     return toList(MOCK_EXPERT_DETAILS);
   }
 }
 
+function withMergedPriorityDetail(item: ExpertDetail): ExpertDetail {
+  const row = mergeRowPriority(item);
+  return {
+    ...item,
+    priorityScore: row.priorityScore,
+  };
+}
+
 export async function getExpertDetail(expertId: string): Promise<ExpertDetail | null> {
   const base = getOptionalApiBase();
   if (!base) {
-    return MOCK_EXPERT_DETAILS.find((x) => x.id === expertId) ?? null;
+    const found = MOCK_EXPERT_DETAILS.find((x) => x.id === expertId);
+    return found ? withMergedPriorityDetail(found) : null;
   }
 
   try {
@@ -116,14 +200,48 @@ export async function getExpertDetail(expertId: string): Promise<ExpertDetail | 
       credentials: "include",
     });
     if (!res.ok) {
-      return MOCK_EXPERT_DETAILS.find((x) => x.id === expertId) ?? null;
+      const found = MOCK_EXPERT_DETAILS.find((x) => x.id === expertId);
+      return found ? withMergedPriorityDetail(found) : null;
     }
-    const payload = (await res.json()) as ApiResponse<ExpertDetail>;
+    const payload = (await res.json()) as ApiResponse<ExpertDetail & { priority_score?: number }>;
     if (!payload?.success || !payload.data) {
-      return MOCK_EXPERT_DETAILS.find((x) => x.id === expertId) ?? null;
+      const found = MOCK_EXPERT_DETAILS.find((x) => x.id === expertId);
+      return found ? withMergedPriorityDetail(found) : null;
     }
-    return payload.data;
+    return withMergedPriorityDetail(payload.data);
   } catch {
-    return MOCK_EXPERT_DETAILS.find((x) => x.id === expertId) ?? null;
+    const found = MOCK_EXPERT_DETAILS.find((x) => x.id === expertId);
+    return found ? withMergedPriorityDetail(found) : null;
+  }
+}
+
+/**
+ * Persists priority locally; optionally PATCHes the backend when API URL is set.
+ * Local overlay wins over API list until the server returns the same field.
+ */
+export async function updateExpertPriorityScore(
+  expertId: string,
+  rawScore: number
+): Promise<void> {
+  const priorityScore = clampExpertPriorityScore(rawScore);
+  const map = readStoredPriorityMap();
+  map[expertId] = priorityScore;
+  persistStoredPriorityMap(map);
+
+  const base = getOptionalApiBase();
+  if (!base) return;
+
+  try {
+    await fetch(`${base}/admin/experts/${expertId}`, {
+      method: "PATCH",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
+      body: JSON.stringify({ priorityScore }),
+    });
+  } catch {
+    /* local overlay remains authoritative for ordering */
   }
 }

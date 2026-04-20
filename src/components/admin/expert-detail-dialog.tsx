@@ -45,6 +45,12 @@ export function ExpertDetailDialog({
                   <span className="text-muted-foreground">Kayıt tarihi</span>
                   <span className="font-medium">{expert.registeredAt ?? "-"}</span>
                 </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">Öncelik skoru</span>
+                  <span className="font-medium tabular-nums">
+                    {expert.priorityScore ?? 0}
+                  </span>
+                </div>
               </div>
 
               <div className="space-y-2">
